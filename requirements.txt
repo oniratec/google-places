@@ -3,3 +3,4 @@ requests
 backoff
 SQLAlchemy
 pandas
+beautifulsoup4
