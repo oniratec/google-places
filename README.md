@@ -1,35 +1,50 @@
 # Google Places Collector + Email Scraper
 
-Collect local businesses using **Google Places API**, enrich each result with a simple
-**email scraper** (via `mailto:` links), and store everything in **SQLite**.
+A **Clean Architecture** application that collects local businesses using **Google Places API**, 
+enriches each result with email addresses scraped from business websites, and stores everything in **SQLite**.
 
-> Google Places does **not** provide emails. This project fetches `website` from Place Details,
-then visits the business website (home and contact page) to find a `mailto:` address.
+> Google Places does **not** provide emails directly. This project fetches the `website` from Place Details,
+then visits the business website (home and contact pages) to find `mailto:` addresses.
 
 ---
 
 ## Features
 
 - **Search** with Places *Text Search* or by *location + radius + type* (e.g., `hair_salon`, `restaurant`).
-- **Details** via Place Details: name, formatted address, website, phone, coordinates.
-- **Email scraping**: parse `mailto:` links on the homepage and up to 3 contact pages.
-- **SQLite storage** with **UPSERT** using `place_id` as the primary key.
-- Optional quality tooling: **Ruff** (lint/format) and **mypy** (type checking).
+- **Details** via Place Details API: name, formatted address, website, phone, coordinates.
+- **Email scraping**: intelligently parses `mailto:` links from homepages and contact pages.
+- **SQLite storage** with **UPSERT** operations using `place_id` as the primary key.
+- **Clean Architecture**: Well-structured codebase with clear separation of concerns.
+- **Type safety**: Full type hints with **mypy** support.
+- **Quality tooling**: **Ruff** (lint/format) and **mypy** (type checking).
 
 ---
 
-## Project Structure
+## Architecture
+
+This project follows **Clean Architecture** principles with clear separation of layers:
 
 ```
-.
-├─ .env                      # API key (do not commit)
-├─ README.md
-├─ .gitignore
-└─ src/
-   ├─ main.py                # CLI entry point
-   ├─ google_places.py       # Google Places client (Text Search + Details)
-   ├─ storage.py             # SQLite repository (schema + upsert + email column)
-   └─ email_scraper.py       # Scrapes website to find mailto emails
+src/
+├── app/                     # Application layer
+│   └── use_cases/          # Business use cases
+│       ├── collect_places.py
+│       └── enrich_emails.py
+├── core/                    # Domain layer
+│   ├── entities.py         # Domain entities (Place)
+│   ├── errors.py           # Domain exceptions
+│   └── ports.py            # Abstract interfaces
+├── infrastructure/         # Infrastructure layer
+│   ├── persistence/
+│   │   └── sqlite/         # SQLite implementation
+│   ├── providers/
+│   │   └── places/         # Google Places API client
+│   └── scrapers/           # Email scraping implementation
+├── interface/              # Interface layer
+│   └── cli.py              # Command-line interface
+└── utils/                  # Shared utilities
+    ├── config.py
+    └── logging.py
 ```
 
 ---
@@ -40,9 +55,19 @@ then visits the business website (home and contact page) to find a `mailto:` add
 - A **Google Cloud** project with **Places API** enabled
 - A **Google Maps Platform API key** with Places access
 
+### Dependencies
+
+The project uses modern Python dependencies managed via `pyproject.toml`:
+
+- **requests**: HTTP client for API calls and web scraping
+- **python-dotenv**: Environment variable management
+- **backoff**: Retry logic with exponential backoff
+- **SQLAlchemy 2.0+**: Modern ORM for database operations
+- **pydantic 2.0+**: Data validation and serialization
+
 ### Google Cloud (quick steps)
 1. Create a project in Google Cloud Console.
-2. Enable **Places API**.
+2. Enable **Places API (New)**.
 3. Create an **API key** under *APIs & Services → Credentials*.
 4. **Restrict** your key (HTTP referrers, IPs, or app restrictions as needed).
 5. Put the key in your `.env` file (see below).
@@ -64,15 +89,12 @@ source .venv/bin/activate
 ```
 
 ### 2) Install dependencies
-If you use `pyproject.toml`:
+Install the project in development mode:
 ```bash
 pip install -e .
 ```
 
-Or, if you have `requirements.txt`:
-```bash
-pip install -r requirements.txt
-```
+This will install all required dependencies listed in `pyproject.toml`.
 
 ### 3) Environment variables
 Create **`.env`** in the project root:
@@ -86,23 +108,29 @@ GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
 
 ## Usage
 
-### Text Search example
+The application provides a command-line interface with different commands for various operations.
+
+### Collect places by text search
 ```bash
-python -m src.main --query "hair salon in malasana" --max 80
+python -m src.interface.cli collect-text --query "hair salon in malasana" --max 80
 ```
 
-### Location + radius + type example
+### Collect places by location and type
 ```bash
-python -m src.main --location "40.4203,-3.7045" --radius 1500 --type hair_salon --max 100
+python -m src.interface.cli collect-nearby --location "40.4203,-3.7045" --radius 1500 --type hair_salon --max 100
+```
+
+### Enrich existing places with emails
+```bash
+python -m src.interface.cli enrich-emails --max 50
 ```
 
 **What happens:**
-1. Uses Text Search (or your location+type) to collect candidate `place_id`s.
-2. Calls Place Details for each to get: `name`, `formatted_address`, `website`, `phone`, `lat`, `lng`.
-3. If `website` exists, runs the scraper:
+1. **collect-text/collect-nearby**: Uses Google Places API to find businesses and store basic details.
+2. **enrich-emails**: For places with websites, runs the email scraper:
    - Parses homepage `mailto:` links.
-   - If none, follows up to **3** contact-like links (e.g., `contact`, `contacto`) and searches again.
-4. Upserts into **SQLite** (`places.db`) with a simple migration to add `email` column if missing.
+   - If none found, follows up to **3** contact-like links (e.g., `contact`, `contacto`) and searches again.
+3. All data is stored in **SQLite** (`places.db`) with automatic schema management.
 
 ---
 
@@ -150,80 +178,110 @@ SQL
 
 ---
 
-## CLI Options
+## CLI Commands & Options
 
+### collect-text
+Collect places using text search.
+```bash
+python -m src.interface.cli collect-text --query "SEARCH_TEXT" [OPTIONS]
 ```
---query    "search text", e.g. "barbers in lavapies"
---location "lat,lng"      e.g. "40.4203,-3.7045"
---radius   N (meters)     e.g. 1500
---type     place type     e.g. hair_salon, restaurant, barber_shop
---max      result limit   default 120
---dbpath   SQLite path    default places.db
-```
+- `--query`: Search text (required)
+- `--location`: Optional location bias "lat,lng"
+- `--radius`: Search radius in meters
+- `--type`: Place type filter
+- `--max`: Maximum results (default: 120)
+- `--dbpath`: SQLite database path (default: places.db)
 
-Use either `--query` **or** (`--location` + `--radius` + `--type`).
+### collect-nearby  
+Collect places by location, radius, and type.
+```bash
+python -m src.interface.cli collect-nearby --location "LAT,LNG" --radius METERS --type TYPE [OPTIONS]
+```
+- `--location`: Center point "lat,lng" (required)
+- `--radius`: Search radius in meters (required)
+- `--type`: Place type (required, e.g., restaurant, hair_salon)
+- `--max`: Maximum results (default: 120)
+- `--dbpath`: SQLite database path (default: places.db)
+
+### enrich-emails
+Scrape emails from existing places with websites.
+```bash
+python -m src.interface.cli enrich-emails [OPTIONS]
+```
+- `--max`: Maximum places to process (default: 50)
+- `--dbpath`: SQLite database path (default: places.db)
 
 ---
 
-## Quality Tooling (optional but recommended)
+## Quality Tooling
 
-### Ruff (lint & format) + mypy (types)
-Add to your `pyproject.toml`:
+The project includes comprehensive code quality tools configured in `pyproject.toml`:
+
+### Ruff (linting & formatting)
 ```toml
 [tool.ruff]
 line-length = 100
 target-version = "py310"
 lint.select = ["E","F","I","UP","B","SIM","C4","RET","RUF"]
 lint.ignore = ["ANN101","ANN102"]
-exclude = [".venv",".mypy_cache",".ruff_cache","build","dist","__pycache__"]
+```
 
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-
+### mypy (type checking)  
+```toml
 [tool.mypy]
 python_version = "3.10"
-ignore_missing_imports = true
 strict_optional = true
 disallow_untyped_defs = true
+ignore_missing_imports = true
 ```
 
-Install and enable pre-commit hooks:
+### Running quality checks
 ```bash
-pip install pre-commit ruff mypy
-pre-commit install
-```
+# Format code
+ruff format
 
-`.pre-commit-config.yaml`:
-```yaml
-repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
-    hooks:
-      - id: mypy
+# Lint code  
+ruff check
+
+# Type check
+mypy src/
 ```
 
 ---
 
 ## Troubleshooting
 
-- **`ModuleNotFoundError` importing your modules**  
-  Run from project root and use module form: `python -m src.main`. Ensure `src/__init__.py` exists.
+- **`ModuleNotFoundError` importing modules**  
+  Run from project root: `python -m src.interface.cli`. Ensure all `__init__.py` files exist.
 
 - **`RuntimeError: Missing GOOGLE_MAPS_API_KEY`**  
-  Ensure `.env` exists at the project root and is loaded before API calls.
+  Ensure `.env` exists at the project root with your API key.
 
-- **`REQUEST_DENIED` / API not authorized**  
-  Verify Places API is enabled and API key restrictions are correct.
+- **`REQUEST_DENIED` / API authorization errors**  
+  Verify Places API (New) is enabled and API key restrictions are correct.
 
-- **Quota / rate issues**  
-  Reduce `--max`, add backoff/rate-limiting, or enable billing for higher quotas.
+- **Database connection issues**  
+  The SQLite database is created automatically. Check file permissions if issues persist.
+
+- **Email scraping timeouts**  
+  Some websites may be slow or block requests. The scraper includes retry logic and timeouts.
+
+---
+
+## Development
+
+### Running tests
+```bash
+# Add your test runner here when tests are implemented
+pytest
+```
+
+### Project structure guidelines
+- **Domain logic** goes in `src/core/`
+- **Use cases** go in `src/app/use_cases/`  
+- **External integrations** go in `src/infrastructure/`
+- **User interfaces** go in `src/interface/`
+- **Utilities** go in `src/utils/`
 
 ---
 
