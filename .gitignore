@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Editors / IDE
+.vscode/
+.idea/
+*.swp
+
+# Environment files
+.env
+.env.*
+
+# Databases & data outputs
+*.db
+*.sqlite
+*.sqlite3
+*.csv
+*.tsv
+*.parquet
+*.log
+logs/
+
+# OS metadata
+.DS_Store
+Thumbs.db
