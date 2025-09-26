@@ -22,7 +22,7 @@ class PlacesProvider(Protocol):
         query: str,
         location: str | None,
         radius_m: int | None,
-        type_: str | None,
+        types_: list[str] | None,
         max_results: int,
     ) -> list[Place]: ...
 
@@ -32,7 +32,7 @@ class PlacesProvider(Protocol):
         center_lat: float,
         center_lng: float,
         radius_m: int,
-        type_: str,
+        types: list[str],
         cell_radius_m: int,
         overall_max: int,
     ) -> list[Place]: ...

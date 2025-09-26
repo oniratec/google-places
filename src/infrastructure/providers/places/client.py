@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import os
 import time
@@ -43,6 +44,8 @@ def _deg_lng(m, lat):
 
 
 class PlacesV1Client(PlacesProvider):
+    logger = logging.getLogger(__name__)
+    
     @backoff.on_exception(backoff.expo, (requests.RequestException,), max_time=60)
     def text_search(
         self,
@@ -50,14 +53,14 @@ class PlacesV1Client(PlacesProvider):
         query: str,
         location: str | None,
         radius_m: int | None,
-        type_: str | None,
+        types: list[str] | None,
         max_results: int = 120,
     ) -> list[Place]:
         url = f"{BASE_V1}/places:searchText"
-        field_mask = "places.name,places.displayName,places.formattedAddress"
+        field_mask = "places.name,places.displayName,places.formattedAddress,places.types"
         body: dict[str, Any] = {"textQuery": query, "pageSize": 20}
-        if type_:
-            body["includedTypes"] = [type_]
+        if types:
+            body["includedTypes"] = types
         if location and radius_m:
             lat, lng = map(float, location.split(","))
             body["locationBias"] = {
@@ -80,6 +83,7 @@ class PlacesV1Client(PlacesProvider):
                         place_id=_pid(p.get("name")) or "",
                         name=(p.get("displayName") or {}).get("text") or "",
                         address=p.get("formattedAddress"),
+                        types=p.get("types", []),
                     )
                 )
                 if len(out) >= max_results:
@@ -93,7 +97,7 @@ class PlacesV1Client(PlacesProvider):
     def place_details(self, place_id: str) -> Place:
         url = f"{BASE_V1}/places/{place_id}"
         field_mask = (
-            "name,displayName,formattedAddress,websiteUri,internationalPhoneNumber,location"
+            "name,displayName,formattedAddress,websiteUri,internationalPhoneNumber,location,types"
         )
         r = requests.get(url, headers=_headers(field_mask), timeout=30)
         d = r.json()
@@ -108,16 +112,27 @@ class PlacesV1Client(PlacesProvider):
             phone=d.get("internationalPhoneNumber"),
             lat=loc.get("latitude"),
             lng=loc.get("longitude"),
+            types=d.get("types", []),
         )
 
     @backoff.on_exception(backoff.expo, (requests.RequestException,), max_time=60)
     def _nearby_circle(
-        self, *, center_lat: float, center_lng: float, radius_m: int, type_: str
+        self,
+        *,
+        center_lat: float,
+        center_lng: float,
+        radius_m: int,
+        types: list[str],
+        excluded_types: list[str] | None = None,
+        rank_preference: str = "DISTANCE",
     ) -> list[Place]:
         url = f"{BASE_V1}/places:searchNearby"
-        field_mask = "places.name,places.displayName,places.formattedAddress,places.location"
+        field_mask = (
+            "places.name,places.displayName,places.formattedAddress,places.location,places.types"
+        )
         body = {
-            "includedTypes": [type_],
+            "includedTypes": types,
+            "excludedTypes": excluded_types or [],
             "locationRestriction": {
                 "circle": {
                     "center": {"latitude": center_lat, "longitude": center_lng},
@@ -125,6 +140,7 @@ class PlacesV1Client(PlacesProvider):
                 }
             },
             "maxResultCount": 20,
+            "rankPreference": rank_preference,
         }
         out: list[Place] = []
         token: str | None = None
@@ -149,6 +165,7 @@ class PlacesV1Client(PlacesProvider):
                         address=p.get("formattedAddress"),
                         lat=loc.get("latitude"),
                         lng=loc.get("longitude"),
+                        types=p.get("types", []),
                     )
                 )
             token = data.get("nextPageToken")
@@ -176,9 +193,11 @@ class PlacesV1Client(PlacesProvider):
         center_lat: float,
         center_lng: float,
         radius_m: int,
-        type_: str,
+        types: list[str],
         cell_radius_m: int = 600,
         overall_max: int = 2000,
+        excluded_types: list[str] | None = None,
+        rank_preference: str = "DISTANCE",
     ) -> list[Place]:
         centers = self._grid_centers(
             center_lat=center_lat,
@@ -189,9 +208,16 @@ class PlacesV1Client(PlacesProvider):
         seen, out = set(), []
         for lat, lng in centers:
             batch = self._nearby_circle(
-                center_lat=lat, center_lng=lng, radius_m=cell_radius_m, type_=type_
+                center_lat=lat,
+                center_lng=lng,
+                radius_m=cell_radius_m,
+                types=types,
+                excluded_types=excluded_types,
+                rank_preference=rank_preference,
             )
+            
             for p in batch:
+                self.logger.info(f"[BATCH] {p.name} -> {p.website}")
                 if p.place_id and p.place_id not in seen:
                     seen.add(p.place_id)
                     out.append(p)

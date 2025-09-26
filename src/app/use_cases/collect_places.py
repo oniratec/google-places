@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from src.core.entities import Place
@@ -15,13 +16,13 @@ class CollectPlacesUseCase:
         self,
         *,
         query: str,
-        location: Optional[str],
-        radius_m: Optional[int],
-        type_: Optional[str],
+        location: str | None,
+        radius_m: int | None,
+        types: str | None,
         max_results: int,
     ) -> list[Place]:
         hits = self.provider.text_search(
-            query=query, location=location, radius_m=radius_m, type_=type_, max_results=max_results
+            query=query, location=location, radius_m=radius_m, type_=types, max_results=max_results
         )
         return self._details_and_store(hits)
 
@@ -31,7 +32,7 @@ class CollectPlacesUseCase:
         center_lat: float,
         center_lng: float,
         radius_m: int,
-        type_: str,
+        types: list[str],
         cell_radius_m: int,
         overall_max: int,
     ) -> list[Place]:
@@ -39,7 +40,7 @@ class CollectPlacesUseCase:
             center_lat=center_lat,
             center_lng=center_lng,
             radius_m=radius_m,
-            type_=type_,
+            types=types,
             cell_radius_m=cell_radius_m,
             overall_max=overall_max,
         )

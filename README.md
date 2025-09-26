@@ -188,18 +188,18 @@ python -m src.interface.cli collect-text --query "SEARCH_TEXT" [OPTIONS]
 - `--query`: Search text (required)
 - `--location`: Optional location bias "lat,lng"
 - `--radius`: Search radius in meters
-- `--type`: Place type filter
+- `--types`: Place type filters separated by commas
 - `--max`: Maximum results (default: 120)
 - `--dbpath`: SQLite database path (default: places.db)
 
 ### collect-nearby  
 Collect places by location, radius, and type.
 ```bash
-python -m src.interface.cli collect-nearby --location "LAT,LNG" --radius METERS --type TYPE [OPTIONS]
+python -m src.interface.cli collect-nearby --location "LAT,LNG" --radius METERS --types TYPE [OPTIONS]
 ```
 - `--location`: Center point "lat,lng" (required)
 - `--radius`: Search radius in meters (required)
-- `--type`: Place type (required, e.g., restaurant, hair_salon)
+- `--types`: Place types (required, e.g., restaurant, hair_salon)
 - `--max`: Maximum results (default: 120)
 - `--dbpath`: SQLite database path (default: places.db)
 

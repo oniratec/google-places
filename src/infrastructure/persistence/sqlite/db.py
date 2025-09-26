@@ -17,6 +17,7 @@ MIGRATIONS = [
     ("email", "ALTER TABLE places ADD COLUMN email TEXT;"),
     ("updated_at", "ALTER TABLE places ADD COLUMN updated_at TEXT;"),
     ("email_scraped_at", "ALTER TABLE places ADD COLUMN email_scraped_at TEXT;"),
+    ("types", "ALTER TABLE places ADD COLUMN types TEXT;"),
 ]
 
 

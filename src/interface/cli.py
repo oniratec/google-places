@@ -1,4 +1,5 @@
 import argparse
+import logging
 import time
 
 from src.app.use_cases.collect_places import CollectPlacesUseCase
@@ -27,14 +28,14 @@ def main():
     p1.add_argument("--query", required=True)
     p1.add_argument("--location", default=None)
     p1.add_argument("--radius", type=int, default=None)
-    p1.add_argument("--type", dest="type_", default=None)
+    p1.add_argument("--type", default=None)
     p1.add_argument("--max", type=int, default=120)
     p1.add_argument("--dbpath", default="places.db")
 
     p2 = sub.add_parser("collect-nearby")
     p2.add_argument("--location", required=True, help="lat,lng")
     p2.add_argument("--radius", type=int, required=True)
-    p2.add_argument("--type", dest="type_", required=True)
+    p2.add_argument("--types", required=True)
     p2.add_argument("--cell-radius", type=int, default=600)
     p2.add_argument("--max", type=int, default=1000)
     p2.add_argument("--dbpath", default="places.db")
@@ -46,6 +47,8 @@ def main():
     args = ap.parse_args()
 
     repo, provider, scraper = build_container(args.dbpath)
+    cli_types = [t.strip() for t in (args.types or "").split(",") if t.strip()]
+
     try:
         if args.cmd == "collect-text":
             uc = CollectPlacesUseCase(repo, provider)
@@ -53,7 +56,7 @@ def main():
                 query=args.query,
                 location=args.location,
                 radius_m=args.radius,
-                type_=args.type_,
+                types_=cli_types,
                 max_results=args.max,
             )
             # Scraping “al vuelo”
@@ -72,7 +75,7 @@ def main():
                 center_lat=lat,
                 center_lng=lng,
                 radius_m=args.radius,
-                type_=args.type_,
+                types=cli_types,
                 cell_radius_m=args.cell_radius,
                 overall_max=args.max,
             )

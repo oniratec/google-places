@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -12,7 +12,7 @@ class MailtoScraper:
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari"
     }
 
-    def _fetch(self, url: str, timeout: int = 15) -> Optional[str]:
+    def _fetch(self, url: str, timeout: int = 15) -> str | None:
         try:
             r = requests.get(
                 url, headers=self.DEFAULT_HEADERS, timeout=timeout, allow_redirects=True
@@ -43,7 +43,7 @@ class MailtoScraper:
                 cands.append(h)
         return cands[:3]
 
-    def get_email_from_site(self, website_url: str) -> Optional[str]:
+    def get_email_from_site(self, website_url: str) -> str | None:
         if not website_url:
             return None
         parsed = urlparse(website_url)

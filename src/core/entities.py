@@ -11,3 +11,4 @@ class Place:
     lat: float | None = None
     lng: float | None = None
     email: str | None = None
+    types: list[str] | None = None 
